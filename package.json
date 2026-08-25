@@ -1,0 +1,71 @@
+{
+  "name": "dsh-peak-gate",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness peak/off-peak pricing gate: during peak hours (weekdays 09:00-12:00 / 14:00-18:00 Beijing time) every send asks for confirmation, with an option to mute the reminder for the current peak segment, or to queue the message for off-peak (half price) auto-send via the /peakgate command family; off-peak hours never ask. | DeepSeek Harness 峰谷计费闸门：高峰时段（工作日北京时间 09:00-12:00 / 14:00-18:00）每次发送都确认，可勾选“本次高峰段内不再提示”，或用 /peakgate 指令排队到空闲时段（半价）自动发送；空闲时段不询问。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "peak",
+    "off-peak",
+    "pricing",
+    "queue",
+    "峰谷",
+    "低谷",
+    "省钱"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  },
+  "scripts": {
+    "test": "node test/integration.test.mjs && node test/smoke.test.mjs",
+    "test:integration": "node test/integration.test.mjs",
+    "test:smoke": "node test/smoke.test.mjs"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/f20880479-lab/dsh-peak-gate.git"
+  },
+  "homepage": "https://github.com/f20880479-lab/dsh-peak-gate",
+  "bugs": {
+    "url": "https://github.com/f20880479-lab/dsh-peak-gate/issues"
+  },
+  "license": "MIT"
+}

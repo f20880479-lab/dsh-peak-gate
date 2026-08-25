@@ -1,0 +1,9 @@
+# dsh-peak-gate bundle patch: inserts the plugin row into the profile roster.
+# Applied as a profile bundle layer (the `dsh.bundle.patch` manifest field).
+#
+# The row is a bare plugin by package name: the node half (exports ".") is a
+# no-op row so the loader hosts the package, and the `dsh.client` declaration
+# makes the browser half (exports "./client") load in the web GUI.
+- insert:
+    - id: peak-gate
+      name: 'dsh-peak-gate'
