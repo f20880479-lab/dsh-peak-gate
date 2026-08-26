@@ -37,21 +37,17 @@
 
 ## 安装
 
-### 方式一：dsh CLI（官方路径）
+### 方式一：npm registry 直接安装（已发布，推荐）
 
 ```bash
-dsh plugin --profile desktop add link:<本包绝对路径>
-dsh plugin --profile web add link:<本包绝对路径>
+dsh plugin --profile desktop add dsh-peak-gate
+dsh plugin --profile web add dsh-peak-gate
 ```
 
-然后把 `dsh-peak-gate` 追加到对应 profile 的 `~/.dsh/profiles/<name>/package.json` 的
-`dsh.profile.bundles` 数组中，**重启 DSH Desktop** 生效。
+然后确认 `dsh-peak-gate` 出现在对应 profile 的 `~/.dsh/profiles/<name>/package.json` 的
+`dsh.profile.bundles` 中，**重启 DSH Desktop** 生效。
 
-> 注意：Windows 下路径含中文/空格时，`dsh plugin add` 的批处理垫片可能把依赖路径写成乱码，
-> 请用文本方式修正 `dependencies["dsh-peak-gate"]` 为
-> `link:D:/常用仓库/deepseek harness仓库/峰谷使用情况/dsh-peak-gate`（以实际路径为准）。
-
-### 方式二：手动（本机已安装，等价于已执行）
+### 方式二：本地 link 安装（开发调试）
 
 1. 在 profile 目录执行 `pnpm add link:<本包绝对路径>`
 2. 在 profile `package.json` 的 `dsh.profile.bundles` 末尾追加 `"dsh-peak-gate"`
