@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-peak-gate — 界面效果预览</title>
+<style>
+  :root {
+    /* 模拟 DSH 深色主题 */
+    --bg: #0f1115;
+    --bg-elev: #15181f;
+    --panel: #1a1e26;
+    --panel-tip: #171b22;
+    --label-1: #e8eaed;
+    --label-2: #a6abb5;
+    --label-3: #7d828d;
+    --warn-1: #f59e0b;
+    --warn-2: rgba(245, 158, 11, .32);
+    --warn-3: rgba(245, 158, 11, .12);
+    --ok-1: #34d17e;
+    --ok-3: rgba(52, 209, 126, .14);
+    --border-1: rgba(255, 255, 255, .05);
+    --border-2: rgba(255, 255, 255, .09);
+    --hover: rgba(255, 255, 255, .055);
+    --chip: #20242e;
+    --shadow: 0 12px 40px rgba(0, 0, 0, .55);
+    --content-w: 748px;
+    --clear: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 80px;
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2030 0%, var(--bg) 60%);
+    color: var(--label-1);
+    font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .page-title { text-align: center; margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: .5px; }
+  .page-sub { text-align: center; margin: 0 0 36px; color: var(--label-3); font-size: 13px; }
+  .stage {
+    width: min(var(--content-w), 100%);
+    margin: 0 auto 44px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-1);
+    border-radius: 18px;
+    padding: 20px;
+    position: relative;
+  }
+  .stage-label {
+    position: absolute; top: -10px; left: 16px;
+    background: var(--bg-elev); padding: 0 10px;
+    font-size: 12px; color: var(--label-3); border: 1px solid var(--border-1); border-radius: 999px;
+  }
+  /* ===== 会话内队列 dock ===== */
+  .dock { width: 100%; margin: 0 auto; }
+  .hheader {
+    width: 100%; height: 36px; color: var(--label-1); text-align: left; cursor: pointer;
+    background: transparent; border: none; border-radius: 9px;
+    display: flex; align-items: center; gap: 10px; padding: 4px 12px;
+    transition: background .12s ease; font: inherit;
+  }
+  .hheader:hover { background: var(--hover); }
+  .hlead { color: var(--warn-1); display: grid; place-items: center; flex: none; }
+  .hcount { flex: auto; font-size: 13px; font-weight: 500; }
+  .hchevron { width: 14px; height: 14px; color: var(--label-3); display: grid; place-items: center; flex: none; }
+  .hpanel {
+    background: var(--panel-tip); border-radius: 12px 12px 0 0;
+    padding: 6px 8px 8px; position: relative; overflow: hidden;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: inset 0 0 0 1px var(--border-1);
+  }
+  .hpanel::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--warn-1), transparent 65%); opacity: .85;
+  }
+  .hlist { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
+  .hrow {
+    border-radius: 9px; display: flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 4px 6px 4px 10px; transition: background .1s ease;
+  }
+  .hrow:hover { background: var(--hover); }
+  .hidx {
+    width: 20px; height: 20px; flex: none; display: grid; place-items: center;
+    border-radius: 7px; background: var(--chip); color: var(--label-3);
+    font-size: 11px; font-weight: 600;
+  }
+  .hmain { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+  .htext { color: var(--label-1); font-size: 13px; line-height: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hmeta { color: var(--label-3); font-size: 11px; }
+  .hactions { display: flex; align-items: center; gap: 2px; flex: none; opacity: .55; transition: opacity .12s ease; }
+  .hrow:hover .hactions { opacity: 1; }
+  .hact {
+    width: 26px; height: 26px; color: var(--label-2); cursor: pointer;
+    background: transparent; border: none; border-radius: 7px;
+    display: grid; place-items: center; padding: 0; transition: background .1s, color .1s;
+  }
+  .hact:hover:not(:disabled) { background: var(--hover); color: var(--label-1); }
+  .hact:disabled { opacity: .3; cursor: default; }
+  .hact-send { color: var(--ok-1); }
+  .hact-send:hover:not(:disabled) { background: var(--ok-3); color: var(--ok-1); }
+  .hempty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 12px; color: var(--label-3); font-size: 12px; text-align: center; }
+  .hempty-icon { color: var(--label-3); opacity: .8; display: grid; place-items: center; }
+  .hfooter { display: flex; justify-content: flex-end; }
+  .hclear {
+    height: 26px; font: inherit; font-size: 12px; color: var(--label-3); cursor: pointer;
+    background: transparent; border: none; border-radius: 7px; padding: 0 9px; transition: background .1s, color .1s;
+  }
+  .hclear:hover { background: var(--hover); color: #ff6b6b; }
+  .hedit {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--label-1);
+    background: var(--chip); border: 1px solid var(--border-2); border-radius: 7px; padding: 4px 9px;
+  }
+  .hedit:focus { outline: none; border-color: var(--warn-1); }
+  /* ===== 高峰确认卡片 ===== */
+  .card-wrap { display: flex; justify-content: center; padding: 12px 0 4px; }
+  .card {
+    width: 100%; max-width: 440px; border: 1px solid var(--warn-2);
+    background: var(--panel); border-radius: 20px; overflow: hidden;
+    box-shadow: var(--shadow); display: flex; flex-direction: column;
+  }
+  .strip { background: var(--warn-3); color: var(--warn-1); display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn-1); flex: none; }
+  .chead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 16px 16px 0 20px; }
+  .ctitle { margin: 0; font-size: 16px; font-weight: 500; }
+  .cclose { width: 28px; height: 28px; color: var(--label-3); cursor: pointer; background: transparent; border: none; border-radius: 999px; display: grid; place-items: center; }
+  .cclose:hover { background: var(--hover); color: var(--label-1); }
+  .cbody { padding: 10px 20px 4px; font-size: 14px; line-height: 22px; color: var(--label-2); }
+  .cnote { padding: 8px 20px 0; font-size: 12px; color: var(--label-3); }
+  .cmute { display: flex; align-items: center; gap: 8px; padding: 10px 20px 0; font-size: 13px; color: var(--label-2); cursor: pointer; }
+  .cmute input { width: 15px; height: 15px; accent-color: var(--warn-1); margin: 0; cursor: pointer; }
+  .cfoot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 14px 16px 16px; flex-wrap: wrap; }
+  .cbtn { height: 34px; font: inherit; font-size: 14px; cursor: pointer; border-radius: 999px; padding: 0 16px; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; transition: filter .1s, background .1s; }
+  .cbtn-primary { background: var(--warn-1); color: #1c1200; font-weight: 500; }
+  .cbtn-primary:hover { filter: brightness(1.08); }
+  .cbtn-outline { border-color: var(--warn-2); color: var(--warn-1); }
+  .cbtn-outline:hover { background: var(--warn-3); }
+  .hint { text-align: center; color: var(--label-3); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">dsh-peak-gate · 界面预览</h1>
+  <p class="page-sub">模拟 DSH 深色主题 — 上：高峰确认卡片 · 下：会话内待发送队列窗口（可交互）</p>
+
+  <!-- 队列 dock -->
+  <div class="stage">
+    <span class="stage-label">会话内「待发送队列」窗口（composer dock，可交互）</span>
+    <div class="dock" id="dock">
+      <button class="hheader" id="hheader" aria-expanded="false">
+        <span class="hlead">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M4 8h8M6 12h4"/></svg>
+        </span>
+        <span class="hcount" id="hcount">待发送队列 (3)</span>
+        <span class="hchevron" id="hchevron">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+        </span>
+      </button>
+      <div class="hpanel" id="hpanel" style="display:none">
+        <div class="hlist" id="hlist"></div>
+        <div class="hfooter" id="hfooter"></div>
+      </div>
+    </div>
+    <p class="hint">每行操作：<span style="color:var(--ok-1)">⬆ 立即发送</span>（不等待、高峰价也发）· ↑↓ 排序 · ✎ 编辑 · ✕ 删除</p>
+  </div>
+
+  <!-- 高峰确认卡片 -->
+  <div class="stage">
+    <span class="stage-label">高峰时段确认卡片（发送时弹出）</span>
+    <div class="card-wrap">
+      <div class="card">
+        <div class="strip"><span class="dot"></span><span>峰谷计费 · dsh-peak-gate</span></div>
+        <div class="chead">
+          <h2 class="ctitle">现在处于高峰计费时段</h2>
+          <button class="cclose" title="关闭" aria-label="关闭">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+        <div class="cbody">当前北京时间 16:22。工作日高峰时段为 09:00–12:00 / 14:00–18:00，价格为空闲时段的两倍；空闲时段（其余时间及周末）按半价计费。</div>
+        <div class="cnote">本次高峰段持续至 18:00。 · 距空闲时段还有 1h 38m</div>
+        <label class="cmute"><input type="checkbox"> 本次高峰段内不再提示（至 18:00）</label>
+        <div class="cfoot">
+          <button class="cbtn cbtn-outline">等到空闲时段（自动发送）</button>
+          <button class="cbtn cbtn-primary">立即发送（高峰价）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const ICONS = {
+    send: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8.3125 0.9802c.3552.073.6665.224.9502.4521.2245.1807.4675.4257.7167.6749l4.7275 4.7275-1.414 1.414-4.293-4.293v11.0858h-2V4.9558l-4.293 4.293-1.414-1.414 4.7275-4.7275c.2492-.2492.4923-.4942.7168-.6749.2393-.1925.5471-.3883.9501-.4253.2098-.0332.4155-.025.625-.0001Z"/></svg>',
+    up: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V4M4 8l4-4 4 4"/></svg>',
+    down: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v8M4 8l4 4 4-4"/></svg>',
+    edit: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2L6 12l-3 .5L3.5 9.5z"/></svg>',
+    del: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+    check: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8.5l3 3 7-7"/></svg>'
+  };
+  let holds = [
+    { id: 1, text: "帮我整理一下这个项目的 README，补充安装说明", meta: "峰会测试 · /hold" },
+    { id: 2, text: "把下面的对话记录保存为 Markdown 文件", meta: "峰会测试 · /hold" },
+    { id: 3, text: "调研 DeepSeek 峰谷定价各模型的折扣比例", meta: "峰谷使用情况 · 卡片延迟" }
+  ];
+  let expanded = false;
+  let editing = null;
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  function render() {
+    $("#hcount").textContent = `待发送队列 (${holds.length})`;
+    $("#hchevron").innerHTML = expanded
+      ? '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>'
+      : '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>';
+    $("#hpanel").style.display = expanded ? "flex" : "none";
+    $("#hheader").setAttribute("aria-expanded", expanded);
+    const list = $("#hlist");
+    if (holds.length === 0) {
+      list.innerHTML = '<div class="hempty"><span class="hempty-icon"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M4 8h8M6 12h4"/></svg></span><span>队列为空。输入 /peakgate hold 消息 排队，空闲时段（半价）自动发送</span></div>';
+      $("#hfooter").innerHTML = "";
+      return;
+    }
+    list.innerHTML = holds.map((h, i) => {
+      const isEdit = editing === h.id;
+      return `<div class="hrow">
+        <span class="hidx">${i + 1}</span>
+        ${isEdit
+          ? `<input class="hedit" value="${esc(h.text)}">`
+          : `<div class="hmain"><div class="htext">${esc(h.text)}</div><div class="hmeta">${esc(h.meta)}</div></div>`}
+        <div class="hactions">
+          ${isEdit
+            ? `<button class="hact" title="保存" onclick="saveEdit(${h.id})">${ICONS.check}</button>
+               <button class="hact" title="取消" onclick="editing=null;render()">${ICONS.del}</button>`
+            : `<button class="hact hact-send" title="立即发送（不等待，高峰价也发）" onclick="sendNow(${h.id})">${ICONS.send}</button>
+               <button class="hact" title="上移" ${i === 0 ? "disabled" : ""} onclick="move(${h.id},-1)">${ICONS.up}</button>
+               <button class="hact" title="下移" ${i === holds.length - 1 ? "disabled" : ""} onclick="move(${h.id},1)">${ICONS.down}</button>
+               <button class="hact" title="修改文本" onclick="editing=${h.id};render()">${ICONS.edit}</button>
+               <button class="hact" title="删除" onclick="holds=holds.filter(x=>x.id!==${h.id});render()">${ICONS.del}</button>`}
+        </div>
+      </div>`;
+    }).join("");
+    $("#hfooter").innerHTML = `<button class="hclear" onclick="holds=[];render()">清空队列</button>`;
+  }
+  function move(id, delta) {
+    const i = holds.findIndex((x) => x.id === id), j = i + delta;
+    if (i < 0 || j < 0 || j >= holds.length) return;
+    [holds[i], holds[j]] = [holds[j], holds[i]];
+    render();
+  }
+  function saveEdit(id) {
+    const input = document.querySelector(".hrow .hedit");
+    if (input && input.value.trim()) holds.find((x) => x.id === id).text = input.value.trim();
+    editing = null;
+    render();
+  }
+  function sendNow(id) {
+    const h = holds.find((x) => x.id === id);
+    if (!h) return;
+    alert("（演示）立即发送：「" + h.text + "」\n已写入目标会话并提交，本条已移出队列。");
+    holds = holds.filter((x) => x.id !== id);
+    render();
+  }
+  $("#hheader").addEventListener("click", () => { expanded = !expanded; render(); });
+  render();
+</script>
+</body>
+</html>

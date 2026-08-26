@@ -87,7 +87,8 @@ const dict = {
   "dock.save": "保存",
   "dock.cancelEdit": "取消",
   "dock.removeAria": "删除",
-  "dock.clear": "清空队列"
+  "dock.clear": "清空队列",
+  "dock.sendNow": "立即发送（不等待，高峰价也发）"
 };
 const t = (key, params) => {
   let text = dict[key] ?? key;
@@ -223,7 +224,7 @@ await test("checking the mute box silences the segment when sending", async () =
   assert.ok(document.querySelector(".dsh-pg-backdrop") === null);
 });
 
-await test("the session dock window renders the queue with reorder / edit / delete", async () => {
+await test("the session dock window renders the queue with reorder / edit / delete / send-now", async () => {
   const React = checkoutRequire("react");
   const { createRoot } = checkoutRequire("react-dom/client");
   I.writeHolds([
@@ -237,6 +238,7 @@ await test("the session dock window renders the queue with reorder / edit / dele
     React.createElement(I.HoldQueueDock, {
       t,
       gateStore: I.gateStore,
+      ctx,
       useSessions: (sel) => sel({ byId: { s1: { displayTitle: "会话A" } } })
     })
   );
@@ -278,13 +280,25 @@ await test("the session dock window renders the queue with reorder / edit / dele
   await tick();
   assert.equal(I.readHolds()[0].text, "改后的第二条消息", "edited text persisted");
 
-  // Delete the second row.
+  // Delete the second row (q1 — the reordered last item).
   rows = document.querySelectorAll(".dsh-pg-hrow");
   const delBtn = rows[1].querySelector('button[aria-label="删除"]');
   delBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
   assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2"], "item deleted");
   assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 1);
+
+  // Send-now: click the green send button → submitted immediately even in peak, hold consumed.
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  inputState = { ...inputState, draft: "" }; // target session draft must be empty for send-now
+  const sendBtn = rows[0].querySelector('button[aria-label="立即发送（不等待，高峰价也发）"]');
+  assert.ok(sendBtn !== null, "send-now button must exist on each row");
+  submitCalls = 0;
+  sendBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(submitCalls, 1, "send-now must submit immediately");
+  assert.equal(I.readHolds().length, 0, "sent hold must leave the queue");
+  assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 0, "row removed from the UI");
 
   dockRoot.unmount();
   holder.remove();

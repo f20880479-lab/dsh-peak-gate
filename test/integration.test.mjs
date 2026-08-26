@@ -618,6 +618,40 @@ test("editHoldText updates the queued message; blank text is rejected", () => {
   assert.equal(I.editHoldText("nope", "x"), false);
 });
 
+test("sendHoldNow sends a queued message immediately even during peak", () => {
+  local.clear();
+  I.setNow(TUE_PEAK);
+  setSession("s1", "");
+  shared.submitCalls = 0;
+  I.writeHolds([{ id: "a", sessionId: "s1", text: "紧急消息", at: Date.now(), explicit: true }]);
+  assert.equal(I.sendHoldNow(sharedCtx, { id: "a", sessionId: "s1", text: "紧急消息", explicit: true }), true);
+  assert.equal(shared.submitCalls, 1, "must submit even though it is peak");
+  assert.equal(shared.inputs.get("s1").state.draft, "紧急消息", "text restored into the target session");
+  assert.equal(I.readHolds().length, 0, "hold consumed after send");
+});
+
+test("sendHoldNow refuses when the target session has an unsent draft", () => {
+  local.clear();
+  I.setNow(TUE_PEAK);
+  setSession("s1", "用户在写别的草稿");
+  shared.submitCalls = 0;
+  I.writeHolds([{ id: "a", sessionId: "s1", text: "紧急消息", at: Date.now(), explicit: true }]);
+  assert.equal(I.sendHoldNow(sharedCtx, { id: "a", sessionId: "s1", text: "紧急消息", explicit: true }), false);
+  assert.equal(shared.submitCalls, 0, "must not clobber the user's draft");
+  assert.equal(shared.inputs.get("s1").state.draft, "用户在写别的草稿");
+  assert.equal(I.readHolds().length, 1, "hold must stay queued");
+});
+
+test("sendHoldNow refuses when the target session is not open", () => {
+  local.clear();
+  setSession("s1", "");
+  shared.submitCalls = 0;
+  I.writeHolds([{ id: "a", sessionId: "ghost", text: "无人会话", at: Date.now(), explicit: true }]);
+  assert.equal(I.sendHoldNow(sharedCtx, { id: "a", sessionId: "ghost", text: "无人会话", explicit: true }), false);
+  assert.equal(shared.submitCalls, 0);
+  assert.equal(I.readHolds().length, 1, "hold must stay queued");
+});
+
 test("command-created queue entries auto-send at off-peak by restoring the text", () => {
   local.clear();
   I.setNow(TUE_PEAK);
