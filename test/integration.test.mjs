@@ -90,7 +90,9 @@ globalThis.window = {
   clearTimeout: (id) => clearTimeout(id)
 };
 
-const checkoutRequire = createRequire("D:/download/dsh/DSH Desktop/resources/app.asar.unpacked/node_modules/react/package.json");
+// Resolve react from the local devDependencies (npm install) — no machine paths.
+const localRequire = createRequire(import.meta.url);
+const checkoutRequire = createRequire(localRequire.resolve("react/package.json"));
 const requireShim = (spec) => {
   if (spec === "react") return checkoutRequire("react");
   if (spec === "react-dom/client") return { createRoot: () => ({ render: () => {}, unmount: () => {} }) };
