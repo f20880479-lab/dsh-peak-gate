@@ -78,7 +78,16 @@ const dict = {
   "queue.clear": "清空队列",
   "queue.done": "完成",
   "queue.closeAria": "关闭",
-  "cmd.help": "/peakgate hold 消息 — 排队\n/peakgate list — 查看队列"
+  "cmd.help": "/peakgate hold 消息 — 排队\n/peakgate list — 查看队列",
+  "dock.title": "待发送队列 ({n})",
+  "dock.empty": "队列为空。",
+  "dock.up": "上移（提前发送）",
+  "dock.down": "下移（延后发送）",
+  "dock.edit": "修改文本",
+  "dock.save": "保存",
+  "dock.cancelEdit": "取消",
+  "dock.removeAria": "删除",
+  "dock.clear": "清空队列"
 };
 const t = (key, params) => {
   let text = dict[key] ?? key;
@@ -144,8 +153,8 @@ await test("apply() injects styles and the portal container into the real DOM", 
   const styles = document.querySelectorAll("style[data-plugin-css]");
   assert.ok(styles.length >= 2, `expected >=2 injected styles, got ${styles.length}`);
   assert.ok(document.body.querySelector("[data-dsh-peak-gate-root]") !== null, "portal container must be in body");
-  assert.equal(slotRegistrations.length, 1);
-  assert.equal(slotRegistrations[0].key, "settings.general.item");
+  assert.equal(slotRegistrations.length, 2, "settings row + conversation dock must be registered");
+  assert.deepEqual(slotRegistrations.map((r) => r.key), ["settings.general.item", "conversation.input.dock"]);
 });
 
 await test("a real Enter dispatch on the composer textarea renders the confirmation card", async () => {
@@ -214,19 +223,73 @@ await test("checking the mute box silences the segment when sending", async () =
   assert.ok(document.querySelector(".dsh-pg-backdrop") === null);
 });
 
-await test("the queue card renders with real React and lists held messages", async () => {
-  I.writeHolds([{ id: "q1", sessionId: "s1", text: "明天发布公告", at: Date.now(), explicit: true }]);
-  I.openQueue();
+await test("the session dock window renders the queue with reorder / edit / delete", async () => {
+  const React = checkoutRequire("react");
+  const { createRoot } = checkoutRequire("react-dom/client");
+  I.writeHolds([
+    { id: "q1", sessionId: "s1", text: "第一条消息", at: Date.now(), explicit: true },
+    { id: "q2", sessionId: "s1", text: "第二条消息", at: Date.now(), explicit: true }
+  ]);
+  const holder = document.createElement("div");
+  document.body.appendChild(holder);
+  const dockRoot = createRoot(holder);
+  dockRoot.render(
+    React.createElement(I.HoldQueueDock, {
+      t,
+      gateStore: I.gateStore,
+      useSessions: (sel) => sel({ byId: { s1: { displayTitle: "会话A" } } })
+    })
+  );
   await tick();
-  const card = document.querySelector(".dsh-pg-qcard");
-  assert.ok(card !== null, "queue card must be rendered");
-  const rows = card.querySelectorAll(".dsh-pg-qrow");
-  assert.equal(rows.length, 1, "one held message must be listed");
-  assert.ok(rows[0].textContent.includes("明天发布公告"), "held text must be visible");
-  I.closeQueue();
+
+  // Collapsed header always visible with the count.
+  const header = document.querySelector(".dsh-pg-hheader");
+  assert.ok(header !== null, "dock header must render");
+  assert.ok(header.textContent.includes("2"), "header shows the queue count");
+  assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 0, "collapsed by default");
+
+  // Expand: rows appear in send order.
+  header.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
-  assert.ok(document.querySelector(".dsh-pg-qcard") === null, "queue card must close");
+  let rows = document.querySelectorAll(".dsh-pg-hrow");
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0].textContent.includes("第一条消息"));
+  assert.ok(rows[1].textContent.includes("第二条消息"));
+
+  // Reorder: move the first item down → second item becomes first.
+  const firstDown = rows[0].querySelector('button[aria-label="下移（延后发送）"]');
+  firstDown.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2", "q1"], "send order updated after move");
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  assert.ok(rows[0].textContent.includes("第二条消息"), "UI reflects the new order");
+
+  // Edit: open the editor, change the text, save.
+  const editBtn = rows[0].querySelector('button[aria-label="修改文本"]');
+  editBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  const editor = document.querySelector(".dsh-pg-hedit");
+  assert.ok(editor !== null, "editor input must appear");
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  setter.call(editor, "改后的第二条消息");
+  editor.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const saveBtn = document.querySelector('button[aria-label="保存"]');
+  saveBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(I.readHolds()[0].text, "改后的第二条消息", "edited text persisted");
+
+  // Delete the second row.
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  const delBtn = rows[1].querySelector('button[aria-label="删除"]');
+  delBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2"], "item deleted");
+  assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 1);
+
+  dockRoot.unmount();
+  holder.remove();
   I.writeHolds([]);
+  I.closeQueue();
 });
 
 await test("lifecycle disposer removes listeners and unmounts the portal", () => {

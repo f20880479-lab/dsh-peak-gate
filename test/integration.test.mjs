@@ -590,6 +590,34 @@ test("/peakgate cancel clears the whole queue", () => {
   assert.equal(I.readHolds().length, 0);
 });
 
+test("moveHold reorders the queue (send order) with boundary guards", () => {
+  local.clear();
+  I.writeHolds([
+    { id: "a", sessionId: "s1", text: "one", at: Date.now(), explicit: true },
+    { id: "b", sessionId: "s1", text: "two", at: Date.now(), explicit: true },
+    { id: "c", sessionId: "s1", text: "three", at: Date.now(), explicit: true }
+  ]);
+  const ids = () => [...I.readHolds().map((h) => h.id)];
+  assert.equal(I.moveHold("b", -1), true);
+  assert.deepEqual(ids(), ["b", "a", "c"], "b moves up");
+  assert.equal(I.moveHold("b", 1), true);
+  assert.deepEqual(ids(), ["a", "b", "c"], "b moves back down");
+  assert.equal(I.moveHold("a", -1), false, "first item cannot move up");
+  assert.equal(I.moveHold("c", 1), false, "last item cannot move down");
+  assert.equal(I.moveHold("zzz", 1), false, "unknown id is a no-op");
+  assert.deepEqual(ids(), ["a", "b", "c"]);
+});
+
+test("editHoldText updates the queued message; blank text is rejected", () => {
+  local.clear();
+  I.writeHolds([{ id: "a", sessionId: "s1", text: "one", at: Date.now(), explicit: true }]);
+  assert.equal(I.editHoldText("a", "改后的消息"), true);
+  assert.equal(I.readHolds()[0].text, "改后的消息");
+  assert.equal(I.editHoldText("a", "   "), false, "blank edit must be rejected");
+  assert.equal(I.readHolds()[0].text, "改后的消息");
+  assert.equal(I.editHoldText("nope", "x"), false);
+});
+
 test("command-created queue entries auto-send at off-peak by restoring the text", () => {
   local.clear();
   I.setNow(TUE_PEAK);
