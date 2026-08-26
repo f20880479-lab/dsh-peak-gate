@@ -90,11 +90,13 @@ const dict = {
   "dock.clear": "清空队列",
   "dock.sendNow": "立即发送（不等待，高峰价也发）",
   "dock.dragHint": "拖动标题栏可移动窗口",
-  "dock.resetPos": "复位到默认位置",
   "dock.open": "打开待发送队列",
   "dock.collapse": "收起",
   "dock.scopeAll": "全部会话",
-  "dock.scopeCurrent": "仅当前会话"
+  "dock.scopeCurrent": "仅当前会话",
+  "sug.title": "待发送队列指令（空闲时段半价发送）：",
+  "sug.hold": "排队发送",
+  "sug.holdDesc": "把消息存到队列，空闲时段自动发出"
 };
 const t = (key, params) => {
   let text = dict[key] ?? key;
@@ -160,7 +162,7 @@ await test("apply() injects styles and the portal container into the real DOM", 
   const styles = document.querySelectorAll("style[data-plugin-css]");
   assert.ok(styles.length >= 2, `expected >=2 injected styles, got ${styles.length}`);
   assert.ok(document.body.querySelector("[data-dsh-peak-gate-root]") !== null, "portal container must be in body");
-  assert.equal(slotRegistrations.length, 2, "settings row + conversation dock must be registered");
+  assert.equal(slotRegistrations.length, 2, "settings row + queue dock must be registered");
   assert.deepEqual(slotRegistrations.map((r) => r.key), ["settings.general.item", "conversation.input.dock"]);
 });
 
@@ -336,20 +338,29 @@ await test("the session dock window renders the queue with reorder / edit / dele
   assert.equal(win.style.left, "150px", "west resize moves the left edge");
   assert.equal(JSON.parse(window.localStorage.getItem("dsh.peakGate.dockSize.v1")).width, 350);
 
-  // Reset button restores the default position.
-  const resetBtn = document.querySelector('button[aria-label="复位到默认位置"]');
-  assert.ok(resetBtn !== null, "reset button must exist");
-  resetBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-  await tick();
-  assert.equal(win.style.left, "", "position reset after clicking reset");
-  assert.equal(window.localStorage.getItem("dsh.peakGate.dockPos.v1"), null, "saved position cleared");
+  // West-edge resize is persisted.
+  assert.equal(JSON.parse(window.localStorage.getItem("dsh.peakGate.dockSize.v1")).width, 350);
 
-  // Collapse button returns to the floating button.
+  // The explicit collapse button still works.
   const collapseBtn = document.querySelector('button[aria-label="收起"]');
   assert.ok(collapseBtn !== null, "collapse button must exist");
   collapseBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
   assert.ok(document.querySelector(".dsh-pg-fab") !== null, "collapsed again after collapse button");
+  document.querySelector(".dsh-pg-fab").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-window") !== null, "panel reopened");
+
+  // Clicking inside the panel must NOT collapse it.
+  win.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, bubbles: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-window") !== null, "clicking inside the panel keeps it open");
+
+  // Clicking outside the panel collapses it back to the floating button.
+  document.body.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, bubbles: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-fab") !== null, "clicking outside collapses to the floating button");
+  assert.ok(document.querySelector(".dsh-pg-window") === null, "panel hidden after outside click");
 
   // Re-open for the remaining row interactions.
   document.querySelector(".dsh-pg-fab").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -403,6 +414,41 @@ await test("the session dock window renders the queue with reorder / edit / dele
   holder.remove();
   I.writeHolds([]);
   I.closeQueue();
+});
+
+await test("typing /peakgate shows the inline hint; picking an option fills the draft", async () => {
+  const textarea = document.body.querySelector("[data-composer-seat] textarea");
+  textarea.getBoundingClientRect = () => ({ x: 20, y: 460, top: 460, bottom: 500, left: 20, right: 500, width: 480, height: 40 });
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+
+  // Bare prefix → hint bar appears with human-readable options.
+  setter.call(textarea, "/peakgate");
+  textarea.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await tick();
+  const sug = document.querySelector(".dsh-pg-sug");
+  assert.ok(sug !== null, "hint bar must appear while typing /peakgate");
+  assert.ok(sug.textContent.includes("排队发送"), "hint explains the queue command in plain words");
+  assert.ok(sug.textContent.includes("把消息存到队列"), "hint carries a description");
+
+  // Picking "排队发送" fills "/peakgate hold " so the user only types the message.
+  const holdBtn = sug.querySelector("button");
+  holdBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(inputState.draft, "/peakgate hold ", "picking the option fills the command prefix");
+  assert.ok(document.querySelector(".dsh-pg-sug") === null, "hint hides after picking");
+
+  // A complete command hides the hint.
+  setter.call(textarea, "/peakgate hold 明天发布");
+  textarea.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-sug") === null, "no hint for a complete command");
+
+  // Clearing back to the prefix shows it again.
+  setter.call(textarea, "/peakgate");
+  textarea.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-sug") !== null, "hint returns when the command is incomplete again");
+  I.gateStore.set({ ...I.gateStore.getSnapshot(), suggestion: null });
 });
 
 await test("lifecycle disposer removes listeners and unmounts the portal", () => {

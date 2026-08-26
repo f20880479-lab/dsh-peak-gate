@@ -538,6 +538,18 @@ test("commandFromDraft parses the /peakgate command family", () => {
   assert.equal(I.commandFromDraft("/peakgatex hold x"), null);
 });
 
+test("suggestionFor shows the hint only for incomplete /peakgate commands", () => {
+  assert.equal(I.suggestionFor("/peakgate"), true, "bare prefix shows the hint");
+  assert.equal(I.suggestionFor("/peakgate "), true, "prefix + space shows the hint");
+  assert.equal(I.suggestionFor("/peakgate hold"), true, "hold without text shows the hint");
+  assert.equal(I.suggestionFor("/peakgate remove"), true, "remove without index shows the hint");
+  assert.equal(I.suggestionFor("/peakgate hold 买牛奶"), false, "complete hold hides the hint");
+  assert.equal(I.suggestionFor("/peakgate list"), false, "complete list hides the hint");
+  assert.equal(I.suggestionFor("/peakgate cancel"), false, "complete cancel hides the hint");
+  assert.equal(I.suggestionFor("hello /peakgate"), false, "prefix must be at the start");
+  assert.equal(I.suggestionFor("normal message"), false);
+});
+
 test("typing /peakgate hold enqueues the text, clears the draft, and never opens the gate", () => {
   local.clear();
   I.setNow(TUE_PEAK);
@@ -551,8 +563,7 @@ test("typing /peakgate hold enqueues the text, clears the draft, and never opens
   const holds = I.readHolds();
   assert.equal(holds.length, 1);
   assert.equal(holds[0].explicit, true);
-  assert.equal(holds[0].text, "买牛奶");
-  assert.equal(shared.inputs.get("s1").state.draft, "", "command must clear the draft");
+  assert.equal(holds[0].text, "买牛奶");  assert.equal(shared.inputs.get("s1").state.draft, "", "command must clear the draft");
 });
 
 test("/peakgate list opens the queue card; closeQueue closes it", () => {
