@@ -1,8 +1,9 @@
 # dependencies
 node_modules/
 
-# npm auth (never commit tokens)
+# npm auth & cache (never commit)
 .npmrc
+.npm-cache/
 npm-debug.log*
 
 # logs & OS noise
