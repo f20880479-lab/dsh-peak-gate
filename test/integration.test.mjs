@@ -151,6 +151,7 @@ const shared = {
   current: null,
   inputs: new Map(),
   submitCalls: 0,
+  setDrafts: [],
   cleanups: []
 };
 const sharedSessions = {
@@ -166,8 +167,9 @@ const sharedSessions = {
       hooks: { input: { getSnapshot: () => entry.state } },
       props: {
         inputActions: {
-          submit: () => { shared.submitCalls += 1; },
-          setDraft: (t) => { entry.state = { ...entry.state, draft: t }; }
+          // Like the real composer, a submit clears the draft once handed off.
+          submit: () => { shared.submitCalls += 1; entry.state = { ...entry.state, draft: "" }; },
+          setDraft: (t) => { shared.setDrafts.push(t); entry.state = { ...entry.state, draft: t }; }
         }
       }
     };
@@ -302,7 +304,7 @@ test("peak Enter on composer textarea opens the gate", () => {
   I.closeGate("s1");
 });
 
-test("a second Enter while the card is open must not send and keeps the card", () => {
+test("Enter while the card is open force-sends (primary action) and closes the card", () => {
   local.clear();
   I.setNow(TUE_PEAK);
   setSession("s1", "hello world");
@@ -313,19 +315,19 @@ test("a second Enter while the card is open must not send and keeps the card", (
   dispatch("keydown", first);
   assert.equal(first.prevented, true);
   assert.ok(I.gateStore.getSnapshot().pending !== null, "card must be open");
-  // Second Enter (quick double-press) must be swallowed entirely.
+  // Second Enter = confirm "send now" (the card's primary action).
   const second = fakeEvent(textareaIn(seat));
   dispatch("keydown", second);
-  assert.equal(second.prevented, true, "second Enter must be swallowed");
-  assert.equal(second.stopped, true, "second Enter must not reach the composer");
-  assert.equal(shared.submitCalls, 0, "message must not be sent while the card is up");
-  assert.ok(I.gateStore.getSnapshot().pending !== null, "card must stay open");
-  // A send-button click while the card is open must also be swallowed.
+  assert.equal(second.prevented, true, "second Enter must be consumed by the card");
+  assert.equal(shared.submitCalls, 1, "Enter confirms and sends immediately");
+  assert.equal(I.gateStore.getSnapshot().pending, null, "card closes after sending");
+  // A send-button click while the card is up must be swallowed — reopen the card first.
+  I.openGate("s1");
   const click = fakeEvent(sendButtonIn(seat));
   dispatch("click", click);
   assert.equal(click.prevented, true, "send click must be swallowed while the card is up");
-  assert.equal(shared.submitCalls, 0, "no send from click either");
-  assert.ok(I.gateStore.getSnapshot().pending !== null, "card must stay open after click");
+  assert.equal(shared.submitCalls, 1, "no extra send from click");
+  assert.ok(I.gateStore.getSnapshot().pending !== null, "card stays open after the swallowed click");
   I.closeGate("s1");
 });
 
@@ -443,6 +445,7 @@ test("every send during peak asks again when the segment is not muted", () => {
   assert.equal(shared.submitCalls, 1);
   assert.equal(I.gateStore.getSnapshot().pending, null);
   assert.equal(I.isSegmentMuted(SEG_AM), false);
+  setInput("s1", { draft: "新消息" });
   assert.equal(I.shouldIntercept(sharedCtx, I.now()), "s1", "next send must ask again");
   assert.equal(I.shouldIntercept(sharedCtx, I.now()), "s1", "and again — every peak send asks");
 });
@@ -482,7 +485,7 @@ test("muting works across sessions (segment-wide, not per session)", () => {
 
 // --- defer: hold + off-peak auto-send --------------------------------------
 
-test("deferAndHold stores the draft; without mute the next send asks again", () => {
+test("deferAndHold copies the draft into the queue and clears the input", () => {
   local.clear();
   I.setNow(TUE_PEAK);
   setSession("s1", "buy milk");
@@ -494,12 +497,15 @@ test("deferAndHold stores the draft; without mute the next send asks again", () 
   assert.equal(holds.length, 1);
   assert.equal(holds[0].sessionId, "s1");
   assert.equal(holds[0].text, "buy milk");
+  assert.equal(holds[0].explicit, true);
+  assert.equal(shared.inputs.get("s1").state.draft, "", "input cleared after queuing");
   assert.equal(I.gateStore.getSnapshot().pending, null);
   assert.equal(I.isSegmentMuted(SEG_AM), false);
+  setInput("s1", { draft: "新消息" });
   assert.equal(I.shouldIntercept(sharedCtx, I.now()), "s1", "not muted: next send asks again");
 });
 
-test("deferAndHold with mute silences the segment and still holds the draft", () => {
+test("deferAndHold with mute silences the segment and still queues the message", () => {
   local.clear();
   I.setNow(TUE_PEAK);
   setSession("s1", "buy milk");
@@ -512,6 +518,28 @@ test("deferAndHold with mute silences the segment and still holds the draft", ()
   assert.equal(I.shouldIntercept(sharedCtx, I.now()), undefined);
 });
 
+test("multiple deferred messages can wait in parallel and all auto-send at off-peak", () => {
+  local.clear();
+  I.setNow(TUE_PEAK);
+  setSession("s1", "第一条");
+  shared.submitCalls = 0;
+  I.openGate("s1");
+  I.deferAndHold(sharedCtx, "s1", false);
+  setInput("s1", { draft: "第二条" });
+  I.openGate("s1");
+  I.deferAndHold(sharedCtx, "s1", false);
+  setInput("s1", { draft: "第三条" });
+  I.openGate("s1");
+  I.deferAndHold(sharedCtx, "s1", false);
+  const holds = I.readHolds();
+  assert.equal(holds.length, 3, "three messages wait in parallel");
+  // Off-peak arrives; each hold restores its own text and sends.
+  I.setNow(TUE_EVENING);
+  I.sweepHolds(sharedCtx);
+  assert.equal(shared.submitCalls, 3, "all three auto-send at off-peak");
+  assert.equal(I.readHolds().length, 0, "queue drained");
+});
+
 test("auto-send fires when off-peak starts and the draft is intact", () => {
   local.clear();
   I.setNow(TUE_PEAK);
@@ -519,7 +547,7 @@ test("auto-send fires when off-peak starts and the draft is intact", () => {
   shared.submitCalls = 0;
   I.openGate("s1");
   I.deferAndHold(sharedCtx, "s1");
-  // Off-peak arrives; the draft is untouched.
+  // Off-peak arrives; the queued text is restored into the empty draft.
   I.setNow(TUE_EVENING);
   I.sweepHolds(sharedCtx);
   assert.equal(shared.submitCalls, 1, "held message must auto-send at off-peak");
@@ -654,10 +682,11 @@ test("sendHoldNow sends a queued message immediately even during peak", () => {
   I.setNow(TUE_PEAK);
   setSession("s1", "");
   shared.submitCalls = 0;
+  shared.setDrafts = [];
   I.writeHolds([{ id: "a", sessionId: "s1", text: "紧急消息", at: Date.now(), explicit: true }]);
   assert.equal(I.sendHoldNow(sharedCtx, { id: "a", sessionId: "s1", text: "紧急消息", explicit: true }), true);
   assert.equal(shared.submitCalls, 1, "must submit even though it is peak");
-  assert.equal(shared.inputs.get("s1").state.draft, "紧急消息", "text restored into the target session");
+  assert.deepEqual(shared.setDrafts, ["紧急消息"], "text restored into the target session before submit");
   assert.equal(I.readHolds().length, 0, "hold consumed after send");
 });
 
@@ -720,11 +749,12 @@ test("command-created queue entries auto-send at off-peak by restoring the text"
   const event = fakeEvent(textareaIn(seat));
   dispatch("keydown", event);
   assert.equal(I.readHolds().length, 1);
+  shared.setDrafts = [];
   // Off-peak arrives; the draft is empty (command consumed it).
   I.setNow(TUE_EVENING);
   I.sweepHolds(sharedCtx);
   assert.equal(shared.submitCalls, 1, "queued text must be submitted at off-peak");
-  assert.equal(shared.inputs.get("s1").state.draft, "明天发布", "text must be restored before sending");
+  assert.deepEqual(shared.setDrafts, ["明天发布"], "text must be restored before sending");
   assert.equal(I.readHolds().length, 0);
 });
 
@@ -745,18 +775,26 @@ test("queued text never clobbers a draft the user is actively writing", () => {
   assert.equal(I.readHolds().length, 1, "hold must stay queued");
 });
 
-test("edited draft cancels the stale hold instead of sending", () => {
+test("a queued message is skipped (kept waiting) while the user is typing something else", () => {
   local.clear();
   I.setNow(TUE_PEAK);
   setSession("s1", "buy milk");
   shared.submitCalls = 0;
   I.openGate("s1");
   I.deferAndHold(sharedCtx, "s1");
-  setInput("s1", { draft: "buy milk NOW" });
+  // The queued copy is independent of the draft; if the user is typing something
+  // else at off-peak, the hold is skipped and keeps waiting rather than clobbering.
+  setInput("s1", { draft: "在写别的" });
   I.setNow(TUE_EVENING);
   I.sweepHolds(sharedCtx);
-  assert.equal(shared.submitCalls, 0);
-  assert.equal(I.readHolds().length, 0, "stale hold must be dropped");
+  assert.equal(shared.submitCalls, 0, "must not overwrite the user's active draft");
+  assert.equal(shared.inputs.get("s1").state.draft, "在写别的");
+  assert.equal(I.readHolds().length, 1, "hold must stay queued");
+  // Once the user clears the draft, the hold sends on the next sweep.
+  setInput("s1", { draft: "" });
+  I.sweepHolds(sharedCtx);
+  assert.equal(shared.submitCalls, 1, "hold sends after the draft is free");
+  assert.equal(I.readHolds().length, 0);
 });
 
 test("holds never auto-send while still in peak", () => {
