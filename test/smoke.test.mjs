@@ -282,6 +282,23 @@ await test("the session dock window renders the queue with reorder / edit / dele
   assert.ok(rows[0].textContent.includes("第一条消息"));
   assert.ok(rows[1].textContent.includes("第二条消息"));
 
+  // Default panel size is compact.
+  assert.equal(win.style.width, "300px", "default width is compact");
+  assert.equal(win.style.height, "260px", "default height is compact");
+
+  // Resize from the bottom-right handle → size updates and persists.
+  const resize = document.querySelector(".dsh-pg-resize");
+  assert.ok(resize !== null, "resize handle must exist");
+  resize.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, pointerId: 9, clientX: 300, clientY: 260, bubbles: true }));
+  resize.dispatchEvent(new window.PointerEvent("pointermove", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
+  resize.dispatchEvent(new window.PointerEvent("pointerup", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
+  await tick();
+  assert.equal(win.style.width, "400px", "resized width persisted");
+  assert.equal(win.style.height, "330px", "resized height persisted");
+  const savedSize = JSON.parse(window.localStorage.getItem("dsh.peakGate.dockSize.v1"));
+  assert.equal(savedSize.width, 400);
+  assert.equal(savedSize.height, 330);
+
   // Reset button restores the default position.
   const resetBtn = document.querySelector('button[aria-label="复位到默认位置"]');
   assert.ok(resetBtn !== null, "reset button must exist");

@@ -670,6 +670,16 @@ test("dock position persists and resets via localStorage", () => {
   assert.equal(I.loadDockPos(), null, "reset clears the saved position");
 });
 
+test("dock size clamps, persists and has sane defaults", () => {
+  const j = (v) => JSON.stringify(v);
+  assert.equal(j(I.clampDockSize({ width: 9999, height: 9999 }, { width: 1280, height: 800 })), j({ width: 1280 - 24, height: 800 - 60 }));
+  assert.equal(j(I.clampDockSize({ width: 50, height: 50 }, { width: 1280, height: 800 })), j({ width: 260, height: 200 }));
+  local.clear();
+  assert.equal(I.loadDockSize(), null);
+  I.saveDockSize({ width: 360, height: 300 });
+  assert.equal(j(I.loadDockSize()), j({ width: 360, height: 300 }));
+});
+
 test("command-created queue entries auto-send at off-peak by restoring the text", () => {
   local.clear();
   I.setNow(TUE_PEAK);
