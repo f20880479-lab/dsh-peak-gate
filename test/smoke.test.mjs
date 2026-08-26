@@ -88,7 +88,11 @@ const dict = {
   "dock.cancelEdit": "取消",
   "dock.removeAria": "删除",
   "dock.clear": "清空队列",
-  "dock.sendNow": "立即发送（不等待，高峰价也发）"
+  "dock.sendNow": "立即发送（不等待，高峰价也发）",
+  "dock.dragHint": "拖动标题栏可移动窗口",
+  "dock.resetPos": "复位到默认位置",
+  "dock.open": "打开待发送队列",
+  "dock.collapse": "收起"
 };
 const t = (key, params) => {
   let text = dict[key] ?? key;
@@ -244,19 +248,60 @@ await test("the session dock window renders the queue with reorder / edit / dele
   );
   await tick();
 
-  // Collapsed header always visible with the count.
-  const header = document.querySelector(".dsh-pg-hheader");
-  assert.ok(header !== null, "dock header must render");
-  assert.ok(header.textContent.includes("2"), "header shows the queue count");
-  assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 0, "collapsed by default");
+  // Collapsed: a tiny floating button with the queue count badge.
+  const fab = document.querySelector(".dsh-pg-fab");
+  assert.ok(fab !== null, "collapsed floating button must render");
+  assert.ok(fab.textContent.includes("2"), "badge shows the queue count");
+  assert.equal(document.querySelector(".dsh-pg-window"), null, "panel hidden while collapsed");
 
-  // Expand: rows appear in send order.
-  header.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  // Drag the floating button → position updates and persists.
+  assert.equal(fab.style.left, "", "no left before dragging (CSS default position)");
+  fab.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, pointerId: 7, clientX: 100, clientY: 100, bubbles: true }));
+  fab.dispatchEvent(new window.PointerEvent("pointermove", { pointerId: 7, clientX: 150, clientY: 130, bubbles: true }));
+  fab.dispatchEvent(new window.PointerEvent("pointerup", { pointerId: 7, clientX: 150, clientY: 130, bubbles: true }));
   await tick();
+  assert.equal(fab.style.left, "50px", "button moved by dx=50");
+  assert.equal(fab.style.top, "30px", "button moved by dy=30");
+  const saved = JSON.parse(window.localStorage.getItem("dsh.peakGate.dockPos.v1"));
+  assert.equal(saved.x, 50, "dragged position persisted");
+  assert.equal(saved.y, 30);
+
+  // A drag ends with a trailing click that must be swallowed (never a toggle).
+  fab.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(document.querySelector(".dsh-pg-window"), null, "trailing click after drag must not expand");
+
+  // Click the floating button → panel expands with rows in send order.
+  fab.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  const win = document.querySelector(".dsh-pg-window");
+  assert.ok(win !== null, "panel must expand on fab click");
+  assert.equal(document.querySelector(".dsh-pg-fab"), null, "fab hidden while expanded");
   let rows = document.querySelectorAll(".dsh-pg-hrow");
   assert.equal(rows.length, 2);
   assert.ok(rows[0].textContent.includes("第一条消息"));
   assert.ok(rows[1].textContent.includes("第二条消息"));
+
+  // Reset button restores the default position.
+  const resetBtn = document.querySelector('button[aria-label="复位到默认位置"]');
+  assert.ok(resetBtn !== null, "reset button must exist");
+  resetBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(win.style.left, "", "position reset after clicking reset");
+  assert.equal(window.localStorage.getItem("dsh.peakGate.dockPos.v1"), null, "saved position cleared");
+
+  // Collapse button returns to the floating button.
+  const collapseBtn = document.querySelector('button[aria-label="收起"]');
+  assert.ok(collapseBtn !== null, "collapse button must exist");
+  collapseBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-fab") !== null, "collapsed again after collapse button");
+
+  // Re-open for the remaining row interactions.
+  document.querySelector(".dsh-pg-fab").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  assert.equal(rows.length, 2, "panel reopened");
 
   // Reorder: move the first item down → second item becomes first.
   const firstDown = rows[0].querySelector('button[aria-label="下移（延后发送）"]');

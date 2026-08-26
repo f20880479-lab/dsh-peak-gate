@@ -652,6 +652,24 @@ test("sendHoldNow refuses when the target session is not open", () => {
   assert.equal(I.readHolds().length, 1, "hold must stay queued");
 });
 
+// --- draggable dock window position ----------------------------------------
+
+test("clampDockPos keeps the window on screen", () => {
+  const j = (v) => JSON.stringify(v);
+  assert.equal(j(I.clampDockPos({ x: -50, y: -10 }, { width: 1000, height: 800 })), j({ x: 0, y: 0 }));
+  assert.equal(j(I.clampDockPos({ x: 5000, y: 5000 }, { width: 1000, height: 800 })), j({ x: 1000 - 380 - 12, y: 800 - 60 }));
+  assert.equal(j(I.clampDockPos({ x: 300, y: 200 }, { width: 1000, height: 800 })), j({ x: 300, y: 200 }));
+});
+
+test("dock position persists and resets via localStorage", () => {
+  local.clear();
+  assert.equal(I.loadDockPos(), null, "no saved position initially");
+  I.saveDockPos({ x: 120, y: 80 });
+  assert.equal(JSON.stringify(I.loadDockPos()), JSON.stringify({ x: 120, y: 80 }));
+  I.resetDockPos();
+  assert.equal(I.loadDockPos(), null, "reset clears the saved position");
+});
+
 test("command-created queue entries auto-send at off-peak by restoring the text", () => {
   local.clear();
   I.setNow(TUE_PEAK);
