@@ -280,8 +280,8 @@ await test("the session dock window renders the queue with reorder / edit / dele
   // Click the floating button → panel expands with rows in send order.
   fab.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
-  const win = document.querySelector(".dsh-pg-window");
-  assert.ok(win !== null, "panel must expand on fab click");
+  const win = document.querySelector(".dsh-pg-wrap");
+  assert.ok(win !== null, "panel wrap must expand on fab click");
   assert.equal(document.querySelector(".dsh-pg-fab"), null, "fab hidden while expanded");
   let rows = document.querySelectorAll(".dsh-pg-hrow");
   assert.equal(rows.length, 2, "current-session view shows only s1 entries");
@@ -308,18 +308,33 @@ await test("the session dock window renders the queue with reorder / edit / dele
   assert.equal(win.style.width, "300px", "default width is compact");
   assert.equal(win.style.height, "260px", "default height is compact");
 
-  // Resize from the bottom-right handle → size updates and persists.
-  const resize = document.querySelector(".dsh-pg-resize");
-  assert.ok(resize !== null, "resize handle must exist");
-  resize.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, pointerId: 9, clientX: 300, clientY: 260, bubbles: true }));
-  resize.dispatchEvent(new window.PointerEvent("pointermove", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
-  resize.dispatchEvent(new window.PointerEvent("pointerup", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
+  // Resize from the bottom-right corner (se) → size grows, top-left corner anchored.
+  const panel = document.querySelector(".dsh-pg-window");
+  panel.getBoundingClientRect = () => ({ x: 100, y: 80, width: 300, height: 260, top: 80, left: 100, right: 400, bottom: 340 });
+  const se = document.querySelector(".dsh-pg-rz-se");
+  assert.ok(se !== null, "se resize handle must exist");
+  assert.equal(document.querySelectorAll(".dsh-pg-rz").length, 8, "all 8 edges/corners have resize handles");
+  se.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, pointerId: 9, clientX: 300, clientY: 260, bubbles: true }));
+  se.dispatchEvent(new window.PointerEvent("pointermove", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
+  se.dispatchEvent(new window.PointerEvent("pointerup", { pointerId: 9, clientX: 400, clientY: 330, bubbles: true }));
   await tick();
   assert.equal(win.style.width, "400px", "resized width persisted");
   assert.equal(win.style.height, "330px", "resized height persisted");
+  assert.equal(win.style.left, "100px", "top-left corner stays anchored when resizing from se");
   const savedSize = JSON.parse(window.localStorage.getItem("dsh.peakGate.dockSize.v1"));
   assert.equal(savedSize.width, 400);
   assert.equal(savedSize.height, 330);
+
+  // Resize from the west edge → left edge moves, width shrinks (right edge anchored).
+  panel.getBoundingClientRect = () => ({ x: 100, y: 80, width: 400, height: 330, top: 80, left: 100, right: 500, bottom: 410 });
+  const w = document.querySelector(".dsh-pg-rz-w");
+  w.dispatchEvent(new window.PointerEvent("pointerdown", { button: 0, pointerId: 10, clientX: 100, clientY: 200, bubbles: true }));
+  w.dispatchEvent(new window.PointerEvent("pointermove", { pointerId: 10, clientX: 150, clientY: 200, bubbles: true }));
+  w.dispatchEvent(new window.PointerEvent("pointerup", { pointerId: 10, clientX: 150, clientY: 200, bubbles: true }));
+  await tick();
+  assert.equal(win.style.width, "350px", "west resize shrinks width by dx");
+  assert.equal(win.style.left, "150px", "west resize moves the left edge");
+  assert.equal(JSON.parse(window.localStorage.getItem("dsh.peakGate.dockSize.v1")).width, 350);
 
   // Reset button restores the default position.
   const resetBtn = document.querySelector('button[aria-label="复位到默认位置"]');
