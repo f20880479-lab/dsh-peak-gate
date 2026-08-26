@@ -297,7 +297,34 @@ test("peak Enter on composer textarea opens the gate", () => {
   assert.equal(event.prevented, true);
   assert.equal(event.stopped, true);
   assert.equal(I.gateStore.getSnapshot().pending.sessionId, "s1");
-  I.closeGate("s1", "2026-08-25", false);
+  I.closeGate("s1");
+});
+
+test("a second Enter while the card is open must not send and keeps the card", () => {
+  local.clear();
+  I.setNow(TUE_PEAK);
+  setSession("s1", "hello world");
+  shared.submitCalls = 0;
+  const seat = new FakeElement("div");
+  // First Enter opens the card.
+  const first = fakeEvent(textareaIn(seat));
+  dispatch("keydown", first);
+  assert.equal(first.prevented, true);
+  assert.ok(I.gateStore.getSnapshot().pending !== null, "card must be open");
+  // Second Enter (quick double-press) must be swallowed entirely.
+  const second = fakeEvent(textareaIn(seat));
+  dispatch("keydown", second);
+  assert.equal(second.prevented, true, "second Enter must be swallowed");
+  assert.equal(second.stopped, true, "second Enter must not reach the composer");
+  assert.equal(shared.submitCalls, 0, "message must not be sent while the card is up");
+  assert.ok(I.gateStore.getSnapshot().pending !== null, "card must stay open");
+  // A send-button click while the card is open must also be swallowed.
+  const click = fakeEvent(sendButtonIn(seat));
+  dispatch("click", click);
+  assert.equal(click.prevented, true, "send click must be swallowed while the card is up");
+  assert.equal(shared.submitCalls, 0, "no send from click either");
+  assert.ok(I.gateStore.getSnapshot().pending !== null, "card must stay open after click");
+  I.closeGate("s1");
 });
 
 test("off-peak Enter never opens the gate", () => {
@@ -321,7 +348,7 @@ test("click on the composer send button opens the gate; other buttons do not", (
   dispatch("click", event);
   assert.equal(event.prevented, true);
   assert.equal(I.gateStore.getSnapshot().pending.sessionId, "s1");
-  I.closeGate("s1", "2026-08-25", false);
+  I.closeGate("s1");
 
   // A primary-looking button OUTSIDE the composer bar fallback (e.g. approval panel) must not gate.
   const outside = new FakeElement("button");

@@ -170,6 +170,17 @@ await test("a real Enter dispatch on the composer textarea renders the confirmat
   assert.equal(buttons.length, 2, "card must offer send-now and wait-off-peak");
 });
 
+await test("a second Enter while the card is open must not send and keeps the card", async () => {
+  // The card from the previous test is still open; press Enter again on the textarea.
+  const textarea = document.body.querySelector("[data-composer-seat] textarea");
+  const event = new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  const dispatched = textarea.dispatchEvent(event);
+  assert.equal(dispatched, false, "second Enter must be swallowed (preventDefault)");
+  await tick();
+  assert.ok(document.querySelector(".dsh-pg-backdrop") !== null, "card must stay open");
+  assert.equal(submitCalls, 0, "no message must be sent while the card is up");
+});
+
 await test("clicking 'send now' performs the real submit and closes the card", async () => {
   submitCalls = 0;
   const backdrop = document.querySelector(".dsh-pg-backdrop");
