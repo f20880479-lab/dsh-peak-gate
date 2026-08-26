@@ -608,6 +608,24 @@ test("moveHold reorders the queue (send order) with boundary guards", () => {
   assert.deepEqual(ids(), ["a", "b", "c"]);
 });
 
+test("moveHold only reorders within the same session's slice (scoped view)", () => {
+  local.clear();
+  // Global order: [x1(s1), y1(s2), x2(s1), y2(s2)] — moving x1 down must swap with x2, not y1.
+  I.writeHolds([
+    { id: "x1", sessionId: "s1", text: "s1-a", at: Date.now(), explicit: true },
+    { id: "y1", sessionId: "s2", text: "s2-a", at: Date.now(), explicit: true },
+    { id: "x2", sessionId: "s1", text: "s1-b", at: Date.now(), explicit: true },
+    { id: "y2", sessionId: "s2", text: "s2-b", at: Date.now(), explicit: true }
+  ]);
+  const ids = () => [...I.readHolds().map((h) => h.id)];
+  assert.equal(I.moveHold("x1", 1), true);
+  assert.deepEqual(ids(), ["x2", "y1", "x1", "y2"], "x1 swaps with its same-session peer x2, skipping y1");
+  assert.equal(I.moveHold("x1", -1), true);
+  assert.deepEqual(ids(), ["x1", "y1", "x2", "y2"], "x1 moves back up past x2");
+  assert.equal(I.moveHold("x2", 1), false, "x2's only same-session peer x1 is before it — moving down is blocked");
+  assert.deepEqual(ids(), ["x1", "y1", "x2", "y2"], "order unchanged");
+});
+
 test("editHoldText updates the queued message; blank text is rejected", () => {
   local.clear();
   I.writeHolds([{ id: "a", sessionId: "s1", text: "one", at: Date.now(), explicit: true }]);

@@ -92,7 +92,9 @@ const dict = {
   "dock.dragHint": "拖动标题栏可移动窗口",
   "dock.resetPos": "复位到默认位置",
   "dock.open": "打开待发送队列",
-  "dock.collapse": "收起"
+  "dock.collapse": "收起",
+  "dock.scopeAll": "全部会话",
+  "dock.scopeCurrent": "仅当前会话"
 };
 const t = (key, params) => {
   let text = dict[key] ?? key;
@@ -231,9 +233,11 @@ await test("checking the mute box silences the segment when sending", async () =
 await test("the session dock window renders the queue with reorder / edit / delete / send-now", async () => {
   const React = checkoutRequire("react");
   const { createRoot } = checkoutRequire("react-dom/client");
+  // q2 belongs to another session — must be hidden in the default "current session" view.
   I.writeHolds([
     { id: "q1", sessionId: "s1", text: "第一条消息", at: Date.now(), explicit: true },
-    { id: "q2", sessionId: "s1", text: "第二条消息", at: Date.now(), explicit: true }
+    { id: "q2", sessionId: "s2", text: "另一会话消息", at: Date.now(), explicit: true },
+    { id: "q3", sessionId: "s1", text: "第二条消息", at: Date.now(), explicit: true }
   ]);
   const holder = document.createElement("div");
   document.body.appendChild(holder);
@@ -243,15 +247,17 @@ await test("the session dock window renders the queue with reorder / edit / dele
       t,
       gateStore: I.gateStore,
       ctx,
-      useSessions: (sel) => sel({ byId: { s1: { displayTitle: "会话A" } } })
+      sessionId: "s1",
+      useSessions: (sel) => sel({ byId: { s1: { displayTitle: "会话A" }, s2: { displayTitle: "会话B" } } })
     })
   );
   await tick();
 
-  // Collapsed: a tiny floating button with the queue count badge.
+  // Collapsed: a tiny floating button with the CURRENT session's queue count badge.
   const fab = document.querySelector(".dsh-pg-fab");
   assert.ok(fab !== null, "collapsed floating button must render");
-  assert.ok(fab.textContent.includes("2"), "badge shows the queue count");
+  assert.ok(fab.textContent.includes("2"), "badge shows the current session's queue count");
+  assert.ok(!fab.textContent.includes("3"), "other sessions are not counted in the default view");
   assert.equal(document.querySelector(".dsh-pg-window"), null, "panel hidden while collapsed");
 
   // Drag the floating button → position updates and persists.
@@ -278,9 +284,25 @@ await test("the session dock window renders the queue with reorder / edit / dele
   assert.ok(win !== null, "panel must expand on fab click");
   assert.equal(document.querySelector(".dsh-pg-fab"), null, "fab hidden while expanded");
   let rows = document.querySelectorAll(".dsh-pg-hrow");
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 2, "current-session view shows only s1 entries");
   assert.ok(rows[0].textContent.includes("第一条消息"));
   assert.ok(rows[1].textContent.includes("第二条消息"));
+  assert.ok(![...rows].some((r) => r.textContent.includes("另一会话消息")), "other session's entry is hidden by default");
+
+  // Toggle to "all sessions" → the other session's entry appears.
+  const scopeBtn = document.querySelector('button[aria-label="全部会话"]');
+  assert.ok(scopeBtn !== null, "scope toggle must exist");
+  scopeBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  assert.equal(rows.length, 3, "all-sessions view shows every entry");
+  assert.ok([...rows].some((r) => r.textContent.includes("另一会话消息")), "other session's entry visible in all view");
+  // Back to current-session only.
+  const backBtn = document.querySelector('button[aria-label="仅当前会话"]');
+  backBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await tick();
+  rows = document.querySelectorAll(".dsh-pg-hrow");
+  assert.equal(rows.length, 2, "back to current-session view");
 
   // Default panel size is compact.
   assert.equal(win.style.width, "300px", "default width is compact");
@@ -324,7 +346,7 @@ await test("the session dock window renders the queue with reorder / edit / dele
   const firstDown = rows[0].querySelector('button[aria-label="下移（延后发送）"]');
   firstDown.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
-  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2", "q1"], "send order updated after move");
+  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q3", "q2", "q1"], "q1 swapped with its same-session peer q3 (skipping q2)");
   rows = document.querySelectorAll(".dsh-pg-hrow");
   assert.ok(rows[0].textContent.includes("第二条消息"), "UI reflects the new order");
 
@@ -347,7 +369,7 @@ await test("the session dock window renders the queue with reorder / edit / dele
   const delBtn = rows[1].querySelector('button[aria-label="删除"]');
   delBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
-  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2"], "item deleted");
+  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q3", "q2"], "deleted item removed (other session's q2 stays)");
   assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 1);
 
   // Send-now: click the green send button → submitted immediately even in peak, hold consumed.
@@ -359,7 +381,7 @@ await test("the session dock window renders the queue with reorder / edit / dele
   sendBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick();
   assert.equal(submitCalls, 1, "send-now must submit immediately");
-  assert.equal(I.readHolds().length, 0, "sent hold must leave the queue");
+  assert.deepEqual([...I.readHolds().map((h) => h.id)], ["q2"], "sent hold leaves the queue (other session's q2 stays)");
   assert.equal(document.querySelectorAll(".dsh-pg-hrow").length, 0, "row removed from the UI");
 
   dockRoot.unmount();
